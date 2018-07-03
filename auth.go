@@ -10,30 +10,37 @@ import (
 )
 
 var (
-	steam_login = "https://steamcommunity.com/openid/login"
+	steamLogin = "https://steamcommunity.com/openid/login"
 
-	openId_mode       = "checkid_setup"
-	openId_ns         = "http://specs.openid.net/auth/2.0"
-	openId_identifier = "http://specs.openid.net/auth/2.0/identifier_select"
+	openMode       = "checkid_setup"
+	openNS         = "http://specs.openid.net/auth/2.0"
+	openIdentifier = "http://specs.openid.net/auth/2.0/identifier_select"
 
-	validation_regexp        = regexp.MustCompile("^(http|https)://steamcommunity.com/openid/id/[0-9]{15,25}$")
-	digits_extraction_regexp = regexp.MustCompile("\\D+")
+	validationRegexp       = regexp.MustCompile("^(http|https)://steamcommunity.com/openid/id/[0-9]{15,25}$")
+	digitsExtractionRegexp = regexp.MustCompile("\\D+")
 )
 
-type OpenId struct {
+// OpenID ...
+type OpenID struct {
 	root      string
 	returnUrl string
 	data      url.Values
 }
 
-func NewOpenId(r *http.Request) *OpenId {
-	id := new(OpenId)
+// NewOpenID ...
+func NewOpenID(r *http.Request) *OpenID {
+	id := new(OpenID)
 
 	proto := "http://"
-	if r.TLS != nil {
+	if r.Header.Get("X-Forwarded-Proto") == "https" || r.TLS != nil {
 		proto = "https://"
 	}
-	id.root = proto + r.Host
+
+	if r.Header.Get("X-Forwarded-Host") != "" {
+		id.root = proto + r.Host
+	} else {
+		id.root = proto + r.Header.Get("X-Forwarded-Host")
+	}
 
 	uri := r.RequestURI
 	if i := strings.Index(uri, "openid"); i != -1 {
@@ -51,18 +58,18 @@ func NewOpenId(r *http.Request) *OpenId {
 	return id
 }
 
-func (id OpenId) AuthUrl() string {
+func (id OpenID) AuthUrl() string {
 	data := map[string]string{
-		"openid.claimed_id": openId_identifier,
-		"openid.identity":   openId_identifier,
-		"openid.mode":       openId_mode,
-		"openid.ns":         openId_ns,
+		"openid.claimed_id": openIdentifier,
+		"openid.identity":   openIdentifier,
+		"openid.mode":       openMode,
+		"openid.ns":         openNS,
 		"openid.realm":      id.root,
 		"openid.return_to":  id.returnUrl,
 	}
 
 	i := 0
-	url := steam_login + "?"
+	url := steamLogin + "?"
 	for key, value := range data {
 		url += key + "=" + value
 		if i != len(data)-1 {
@@ -73,7 +80,8 @@ func (id OpenId) AuthUrl() string {
 	return url
 }
 
-func (id *OpenId) ValidateAndGetId() (string, error) {
+// ValidateAndGetID ...
+func (id *OpenID) ValidateAndGetID() (string, error) {
 	if id.Mode() != "id_res" {
 		return "", errors.New("Mode must equal to \"id_res\".")
 	}
@@ -94,7 +102,7 @@ func (id *OpenId) ValidateAndGetId() (string, error) {
 	}
 	params.Set("openid.mode", "check_authentication")
 
-	resp, err := http.PostForm(steam_login, params)
+	resp, err := http.PostForm(steamLogin, params)
 	if err != nil {
 		return "", err
 	}
@@ -105,7 +113,7 @@ func (id *OpenId) ValidateAndGetId() (string, error) {
 	}
 
 	response := strings.Split(string(content), "\n")
-	if response[0] != "ns:"+openId_ns {
+	if response[0] != "ns:"+openNS {
 		return "", errors.New("Wrong ns in the response.")
 	}
 	if strings.HasSuffix(response[1], "false") {
@@ -113,21 +121,23 @@ func (id *OpenId) ValidateAndGetId() (string, error) {
 	}
 
 	openIdUrl := id.data.Get("openid.claimed_id")
-	if !validation_regexp.MatchString(openIdUrl) {
+	if !validationRegexp.MatchString(openIdUrl) {
 		return "", errors.New("Invalid steam id pattern.")
 	}
 
-	return digits_extraction_regexp.ReplaceAllString(openIdUrl, ""), nil
+	return digitsExtractionRegexp.ReplaceAllString(openIdUrl, ""), nil
 }
 
-func (id OpenId) ValidateAndGetUser(apiKey string) (*PlayerSummaries, error) {
-	steamId, err := id.ValidateAndGetId()
+// ValidateAndGetUser ...
+func (id OpenID) ValidateAndGetUser(apiKey string) (*PlayerSummaries, error) {
+	steamID, err := id.ValidateAndGetID()
 	if err != nil {
 		return nil, err
 	}
-	return GetPlayerSummaries(steamId, apiKey)
+	return GetPlayerSummaries(steamID, apiKey)
 }
 
-func (id OpenId) Mode() string {
+// Mode ...
+func (id OpenID) Mode() string {
 	return id.data.Get("openid.mode")
 }
