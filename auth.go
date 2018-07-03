@@ -3,7 +3,6 @@ package steam_go
 import (
 	"errors"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -59,6 +58,7 @@ func NewOpenID(r *http.Request) *OpenID {
 	return id
 }
 
+// AuthUrl ...
 func (id OpenID) AuthUrl() string {
 	data := map[string]string{
 		"openid.claimed_id": openIdentifier,
@@ -84,11 +84,9 @@ func (id OpenID) AuthUrl() string {
 // ValidateAndGetID ...
 func (id *OpenID) ValidateAndGetID() (string, error) {
 	if id.Mode() != "id_res" {
-		return "", errors.New("Mode must equal to \"id_res\".")
+		return "", errors.New("Mode must equal to \"id_res\"")
 	}
 
-	log.Println(id.data.Get("openid.return_to"))
-	log.Println(id.returnUrl)
 	if id.data.Get("openid.return_to") != id.returnUrl {
 		return "", errors.New("The \"return_to url\" must match the url of current request")
 	}
@@ -117,15 +115,15 @@ func (id *OpenID) ValidateAndGetID() (string, error) {
 
 	response := strings.Split(string(content), "\n")
 	if response[0] != "ns:"+openNS {
-		return "", errors.New("Wrong ns in the response.")
+		return "", errors.New("Wrong ns in the response")
 	}
 	if strings.HasSuffix(response[1], "false") {
-		return "", errors.New("Unable validate openId.")
+		return "", errors.New("Unable validate openId")
 	}
 
 	openIdUrl := id.data.Get("openid.claimed_id")
 	if !validationRegexp.MatchString(openIdUrl) {
-		return "", errors.New("Invalid steam id pattern.")
+		return "", errors.New("Invalid steam id pattern")
 	}
 
 	return digitsExtractionRegexp.ReplaceAllString(openIdUrl, ""), nil
