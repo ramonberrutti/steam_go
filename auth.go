@@ -3,6 +3,7 @@ package steam_go
 import (
 	"errors"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -86,8 +87,10 @@ func (id *OpenID) ValidateAndGetID() (string, error) {
 		return "", errors.New("Mode must equal to \"id_res\".")
 	}
 
+	log.Println(id.data.Get("openid.return_to"))
+	log.Println(id.returnUrl)
 	if id.data.Get("openid.return_to") != id.returnUrl {
-		return "", errors.New("The \"return_to url\" must match the url of current request.")
+		return "", errors.New("The \"return_to url\" must match the url of current request")
 	}
 
 	params := make(url.Values)
